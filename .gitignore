@@ -23,11 +23,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-venv/
-.env
-.venv
-
 # IDE
 .vscode/
 .idea/
@@ -38,8 +33,9 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Project specific
-*.pdf
-*.xlsx
+# Project
 temp/
 logs/
+*.pdf
+*.xlsx
+!tests/test_data/*.pdf
