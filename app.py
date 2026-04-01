@@ -8,7 +8,6 @@ st.set_page_config(page_title="Convertisseur PDF Fiscal", layout="wide")
 st.title("📄 Convertisseur PDF Fiscal Marocain")
 st.markdown("---")
 
-# Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
     doc_type = st.radio(
@@ -28,20 +27,16 @@ with st.sidebar:
     - Compte de Produits et Charges
     """)
 
-# Upload
 uploaded_file = st.file_uploader("📂 Déposez votre fichier PDF", type=["pdf"])
 
 if uploaded_file:
     with st.spinner("📊 Extraction en cours..."):
         try:
-            # Extraction
             extractor = FiscalPDFExtractor(uploaded_file, doc_type)
             data = extractor.extract_all()
             
-            # Affichage succès
             st.success("✅ Extraction réussie !")
             
-            # Métriques
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Pages traitées", data["stats"]["pages"])
@@ -52,7 +47,6 @@ if uploaded_file:
             with col4:
                 st.metric("Lignes Passif", len(data["passif"]))
             
-            # Aperçu
             st.subheader("📋 Aperçu des données")
             
             tab1, tab2, tab3, tab4 = st.tabs(["Identification", "Bilan Actif", "Bilan Passif", "CPC"])
@@ -68,8 +62,6 @@ if uploaded_file:
             with tab2:
                 if data["actif"]:
                     st.dataframe(pd.DataFrame(data["actif"][:20]), use_container_width=True)
-                    if len(data["actif"]) > 20:
-                        st.info(f"... et {len(data['actif']) - 20} lignes supplémentaires")
                 else:
                     st.warning("Aucune donnée Bilan Actif")
             
@@ -85,15 +77,12 @@ if uploaded_file:
                 else:
                     st.warning("Aucune donnée CPC")
             
-            # Génération Excel
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                # Identification
                 ident_df = pd.DataFrame([data["identification"]]).T.reset_index()
                 ident_df.columns = ["Champ", "Valeur"]
                 ident_df.to_excel(writer, sheet_name="Identification", index=False)
                 
-                # Tableaux
                 if data["actif"]:
                     pd.DataFrame(data["actif"]).to_excel(writer, sheet_name="Bilan Actif", index=False)
                 if data["passif"]:
@@ -101,13 +90,11 @@ if uploaded_file:
                 if data["cpc"]:
                     pd.DataFrame(data["cpc"]).to_excel(writer, sheet_name="CPC", index=False)
                 
-                # Stats
                 stats_df = pd.DataFrame([data["stats"]])
                 stats_df.to_excel(writer, sheet_name="Statistiques", index=False)
             
             output.seek(0)
             
-            # Téléchargement
             filename = f"{data['identification'].get('Raison sociale', 'document').replace(' ', '_')}_{doc_type}.xlsx"
             st.download_button(
                 label="📥 Télécharger Excel",
@@ -117,7 +104,6 @@ if uploaded_file:
                 use_container_width=True
             )
             
-            # Erreurs
             if data["stats"]["errors"]:
                 with st.expander("⚠️ Détails des erreurs"):
                     for err in data["stats"]["errors"]:
