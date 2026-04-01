@@ -1,37 +1,27 @@
-"""Parser spécifique pour les documents DGI"""
-
 import re
 from typing import List, Optional
 import pdfplumber
 
-from .models import (
-    BilanActifLine, BilanPassifLine, CPCLine,
-    IdentificationData, TableType
-)
+from .models import BilanActifLine, BilanPassifLine, CPCLine, IdentificationData
 from .utils import clean_number, clean_text, parse_french_date
 from config.settings import ExtractionConfig
 
 
 class DGIParser:
-    """Parser pour les documents DGI"""
-    
     def __init__(self, config: ExtractionConfig = None):
         self.config = config or ExtractionConfig()
     
     def parse_identification(self, page: pdfplumber.Page) -> IdentificationData:
-        """Extrait les données d'identification"""
         text = page.extract_text()
         if not text:
             return IdentificationData()
         
         data = IdentificationData()
         
-        # Patterns spécifiques DGI
         patterns = {
             "raison_sociale": r"Raison Sociale\s*:\s*(.+?)(?:\n|$)",
             "identifiant_fiscal": r"Identifiant fiscal\s*(\d+)",
-            "taxe_professionnelle": r"Art\. Taxe professionnelle\s*:\s*(\d+)",
-            "ice": r"ICE\s*:\s*(\d+)",
+            "taxe_professionnelle": r"Taxe professionnelle\s*:\s*(\d+)",
             "adresse": r"Adresse\s*:\s*(.+?)(?:\n|$)"
         }
         
@@ -47,14 +37,8 @@ class DGIParser:
                     data.taxe_professionnelle = value
                 elif field == "adresse":
                     data.adresse = clean_text(value)
-                elif field == "ice":
-                    data.ice = value
         
-        # Dates d'exercice
-        ex_match = re.search(
-            r"période du (\d{2}/\d{2}/\d{4}) au (\d{2}/\d{2}/\d{4})",
-            text
-        )
+        ex_match = re.search(r"période du (\d{2}/\d{2}/\d{4}) au (\d{2}/\d{2}/\d{4})", text)
         if ex_match:
             data.exercice_debut = parse_french_date(ex_match.group(1))
             data.exercice_fin = parse_french_date(ex_match.group(2))
@@ -62,17 +46,14 @@ class DGIParser:
         return data
     
     def parse_bilan_actif(self, page: pdfplumber.Page) -> List[BilanActifLine]:
-        """Extrait le bilan actif format DGI"""
         table = self._extract_table(page)
         if not table:
             return []
         
         lines = []
-        
         for row in table:
             if not row or len(row) < 5:
                 continue
-            
             designation = clean_text(row[0])
             if not designation:
                 continue
@@ -85,51 +66,40 @@ class DGIParser:
                 net_n_1=clean_number(row[4]) if len(row) > 4 else None,
                 is_total="TOTAL" in designation.upper()
             )
-            
             lines.append(line)
-        
         return lines
     
     def parse_bilan_passif(self, page: pdfplumber.Page) -> List[BilanPassifLine]:
-        """Extrait le bilan passif format DGI"""
         table = self._extract_table(page)
         if not table:
             return []
         
         lines = []
-        
         for row in table:
             if not row or len(row) < 2:
                 continue
-            
             designation = clean_text(row[0])
             if not designation:
                 continue
             
-            # DGI a souvent une structure différente pour le passif
             line = BilanPassifLine(
                 designation=designation,
                 exercice_n=clean_number(row[1]),
                 exercice_n_1=clean_number(row[2]) if len(row) > 2 else None,
                 is_total="TOTAL" in designation.upper()
             )
-            
             lines.append(line)
-        
         return lines
     
     def parse_cpc(self, page: pdfplumber.Page) -> List[CPCLine]:
-        """Extrait le CPC format DGI"""
         table = self._extract_table(page)
         if not table:
             return []
         
         lines = []
-        
         for row in table:
             if not row or len(row) < 4:
                 continue
-            
             designation = clean_text(row[0])
             if not designation:
                 continue
@@ -142,39 +112,16 @@ class DGIParser:
                 total_n_1=clean_number(row[4]) if len(row) > 4 else None,
                 is_total="TOTAL" in designation.upper()
             )
-            
             lines.append(line)
-        
         return lines
     
     def _extract_table(self, page: pdfplumber.Page) -> List[List[str]]:
-        """Extrait un tableau avec paramètres optimisés DGI"""
         try:
             table = page.extract_table({
                 "vertical_strategy": "lines",
                 "horizontal_strategy": "lines",
-                "snap_tolerance": 8,  # Tolérance plus élevée pour DGI
-                "snap_x_tolerance": 5,
-                "snap_y_tolerance": 5,
+                "snap_tolerance": 8,
             })
             return table if table else []
-        except Exception as e:
-            print(f"Erreur extraction tableau DGI: {e}")
+        except Exception:
             return []
-    
-    def detect_table_type(self, page: pdfplumber.Page) -> Optional[TableType]:
-        """Détecte le type de tableau DGI"""
-        text = page.extract_text()
-        if not text:
-            return None
-        
-        text_upper = text.upper()
-        
-        if "ACTIF" in text_upper and "IMMOBILISATION" in text_upper:
-            return TableType.BILAN_ACTIF
-        elif "PASSIF" in text_upper or "CAPITAUX PROPRES" in text_upper:
-            return TableType.BILAN_PASSIF
-        elif "PRODUITS D'EXPLOITATION" in text_upper or "CHARGES D'EXPLOITATION" in text_upper:
-            return TableType.CPC
-        
-        return None
